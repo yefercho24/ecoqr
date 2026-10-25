@@ -1,0 +1,11 @@
+data/
+dataset/
+.env
+.env.*
+!.env.example
+*.env.txt
+.git/
+__pycache__/
+.pytest_cache/
+node_modules/
+tests/

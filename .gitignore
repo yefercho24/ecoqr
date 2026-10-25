@@ -1,0 +1,12 @@
+# Datos y secretos: NUNCA se suben al repositorio
+data/
+dataset/
+.env
+.env.*
+!.env.example
+*.env.txt
+__pycache__/
+.pytest_cache/
+node_modules/
+modelo/*.h5
+modelo/*.keras

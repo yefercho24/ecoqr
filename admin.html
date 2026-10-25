@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>EcoQR · Administración</title>
+  <link rel="icon" href="/static/icon-192.png" type="image/png" />
+  <link rel="stylesheet" href="/static/fuentes.css" />
+  <link rel="stylesheet" href="/static/tailwind.css" />
+  <script src="/static/chart.umd.js"></script>
+  <style>
+    /* Al imprimir, solo sale el cartel del QR */
+    @media print {
+      body * { visibility: hidden; }
+      #zona-qr, #zona-qr * { visibility: visible; }
+      #zona-qr { position: absolute; left: 0; top: 0; width: 100%; border: none; }
+    }
+  </style>
+</head>
+
+<body class="bg-tiza font-sans text-bosque min-h-screen">
+
+  <!-- ===================== Inicio de sesión ===================== -->
+  <section id="vista-login" class="hidden min-h-screen grid place-items-center px-5">
+    <form id="form-login" class="w-full max-w-sm bg-white rounded-2xl border border-bosque/10 shadow-sm p-6 space-y-4">
+      <div>
+        <h1 class="text-3xl font-extrabold">EcoQR</h1>
+        <p class="opacity-80">Administración</p>
+      </div>
+      <div>
+        <label for="l-usuario" class="block text-sm font-semibold mb-1">Usuario</label>
+        <input id="l-usuario" type="text" autocomplete="username" required class="w-full rounded-xl border border-bosque/25 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-hoja" />
+      </div>
+      <div>
+        <label for="l-clave" class="block text-sm font-semibold mb-1">Contraseña</label>
+        <input id="l-clave" type="password" autocomplete="current-password" required class="w-full rounded-xl border border-bosque/25 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-hoja" />
+      </div>
+      <p id="l-error" role="alert" class="hidden rounded-xl bg-red-50 text-red-800 text-sm px-4 py-3"></p>
+      <button type="submit" class="w-full rounded-xl bg-bosque text-white font-semibold py-3">Entrar</button>
+    </form>
+  </section>
+
+  <!-- ===================== Panel ===================== -->
+  <div id="vista-panel" class="hidden">
+    <header class="bg-bosque text-white px-5 py-4">
+      <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-extrabold">EcoQR · Administración</h1>
+          <p id="quien" class="text-sm text-white/80"></p>
+        </div>
+        <button id="btn-salir" type="button" class="rounded-xl border border-white/60 px-4 py-2 text-sm font-semibold">Cerrar sesión</button>
+      </div>
+    </header>
+
+    <nav class="bg-white border-b border-bosque/10 overflow-x-auto" aria-label="Secciones">
+      <div id="tabs" class="max-w-6xl mx-auto flex gap-1 px-3 whitespace-nowrap">
+        <button data-tab="resumen" class="tab px-4 py-3 font-semibold border-b-4">Resumen</button>
+        <button data-tab="ranking" class="tab px-4 py-3 font-semibold border-b-4">Ranking por salón</button>
+        <button data-tab="actividad" class="tab px-4 py-3 font-semibold border-b-4">Actividad</button>
+        <button data-tab="cursos" class="tab px-4 py-3 font-semibold border-b-4">Cursos</button>
+        <button data-tab="admins" data-solo="principal" class="tab px-4 py-3 font-semibold border-b-4">Administradores</button>
+        <button data-tab="qr" data-solo="principal" class="tab px-4 py-3 font-semibold border-b-4">Código QR</button>
+        <button data-tab="sistema" class="tab px-4 py-3 font-semibold border-b-4">Sistema</button>
+        <button data-tab="cuenta" class="tab px-4 py-3 font-semibold border-b-4">Mi cuenta</button>
+      </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-5 py-6 space-y-6">
+
+      <!-- Filtros (para Resumen, Ranking y Actividad) -->
+      <section id="filtros" class="bg-white rounded-2xl border border-bosque/10 p-4">
+        <h2 class="sr-only">Filtros</h2>
+        <div class="flex flex-wrap items-end gap-4">
+          <div><label for="f-desde" class="block text-sm font-semibold mb-1">Desde</label>
+            <input id="f-desde" type="date" class="rounded-xl border border-bosque/25 px-3 py-2" /></div>
+          <div><label for="f-hasta" class="block text-sm font-semibold mb-1">Hasta</label>
+            <input id="f-hasta" type="date" class="rounded-xl border border-bosque/25 px-3 py-2" /></div>
+          <div id="caja-f-curso"><label for="f-curso" class="block text-sm font-semibold mb-1">Curso</label>
+            <select id="f-curso" class="rounded-xl border border-bosque/25 px-3 py-2 bg-white min-w-[8rem]"><option value="">Todos</option></select></div>
+          <button id="f-limpiar" type="button" class="rounded-xl border border-bosque/40 px-4 py-2 font-semibold">Quitar filtros</button>
+          <a id="btn-csv" href="/admin/api/exportar.csv" class="rounded-xl bg-bosque text-white px-4 py-2 font-semibold ml-auto">Descargar CSV</a>
+        </div>
+      </section>
+
+      <!-- ===== Resumen general ===== -->
+      <section id="sec-resumen" class="space-y-6">
+        <div class="grid gap-4 grid-cols-2 lg:grid-cols-5">
+          <div class="bg-white rounded-2xl border border-bosque/10 p-4"><p id="k-residuos" class="text-3xl font-extrabold">0</p><p class="text-sm mt-1">residuos clasificados</p></div>
+          <div class="bg-white rounded-2xl border border-bosque/10 p-4"><p id="k-reportes" class="text-3xl font-extrabold">0</p><p class="text-sm mt-1">fotos enviadas</p></div>
+          <div class="bg-white rounded-2xl border border-bosque/10 p-4"><p id="k-part" class="text-3xl font-extrabold">0</p><p class="text-sm mt-1">estudiantes participantes</p></div>
+          <div class="bg-white rounded-2xl border border-bosque/10 p-4"><p id="k-aprov" class="text-3xl font-extrabold">—</p><p class="text-sm mt-1">de los residuos eran aprovechables</p></div>
+          <div class="bg-white rounded-2xl border border-bosque/10 p-4"><p id="k-sinid" class="text-3xl font-extrabold">—</p><p class="text-sm mt-1">de las fotos no se pudieron identificar</p></div>
+        </div>
+        <div class="grid gap-6 lg:grid-cols-2">
+          <div class="bg-white rounded-2xl border border-bosque/10 p-5">
+            <h2 class="text-xl font-semibold mb-4">Distribución por caneca</h2>
+            <div class="relative h-72"><canvas id="g-torta" role="img" aria-label="Gráfica de torta con el porcentaje de residuos por categoría"></canvas></div>
+          </div>
+          <div class="bg-white rounded-2xl border border-bosque/10 p-5">
+            <h2 class="text-xl font-semibold mb-4">Residuos por salón</h2>
+            <div class="relative h-72"><canvas id="g-cursos" role="img" aria-label="Gráfica de barras con los residuos clasificados por curso"></canvas></div>
+          </div>
+          <div class="bg-white rounded-2xl border border-bosque/10 p-5">
+            <h2 class="text-xl font-semibold mb-4">Tipos de residuo</h2>
+            <div class="relative h-72"><canvas id="g-tipos" role="img" aria-label="Gráfica de barras con la cantidad de cada tipo de residuo"></canvas></div>
+          </div>
+          <div class="bg-white rounded-2xl border border-bosque/10 p-5">
+            <h2 class="text-xl font-semibold mb-4">Residuos por día</h2>
+            <div class="relative h-72"><canvas id="g-dias" role="img" aria-label="Gráfica de línea con los residuos por día"></canvas></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Ranking ===== -->
+      <section id="sec-ranking" class="hidden bg-white rounded-2xl border border-bosque/10 p-5">
+        <h2 class="text-xl font-semibold mb-1">Ranking por salón</h2>
+        <p id="ranking-nota" class="text-sm opacity-80 mb-4"></p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead><tr class="border-b border-bosque/20">
+              <th class="py-2 pr-4">Puesto</th><th class="py-2 pr-4">Curso</th><th class="py-2 pr-4">Residuos</th>
+              <th class="py-2 pr-4">Por estudiante</th><th class="py-2 pr-4">Participantes</th><th class="py-2 pr-4">Fotos</th><th class="py-2 pr-4">% aprovechable</th>
+            </tr></thead>
+            <tbody id="ranking-cuerpo"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ===== Actividad ===== -->
+      <section id="sec-actividad" class="hidden bg-white rounded-2xl border border-bosque/10 p-5">
+        <h2 class="text-xl font-semibold mb-4">Historial de actividad</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead><tr class="border-b border-bosque/20">
+              <th class="py-2 pr-4">Fecha</th><th class="py-2 pr-4">Estudiante</th><th class="py-2 pr-4">Curso</th>
+              <th class="py-2 pr-4">Residuos identificados</th><th class="py-2 pr-4">Foto</th><th class="py-2 pr-4"></th>
+            </tr></thead>
+            <tbody id="actividad-cuerpo"></tbody>
+          </table>
+        </div>
+        <p id="actividad-vacia" class="hidden py-6 text-center">No hay actividad con estos filtros.</p>
+        <button id="btn-mas" type="button" class="hidden mt-4 rounded-xl border border-bosque/40 px-4 py-2 font-semibold">Ver más</button>
+      </section>
+
+      <!-- ===== Cursos ===== -->
+      <section id="sec-cursos" class="hidden bg-white rounded-2xl border border-bosque/10 p-5">
+        <h2 class="text-xl font-semibold mb-1">Cursos</h2>
+        <p class="text-sm opacity-80 mb-4">Estos son los cursos que ven los estudiantes. Si anotas cuántos estudiantes tiene cada curso, el ranking se calcula por estudiante y es más justo.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead><tr class="border-b border-bosque/20"><th class="py-2 pr-4">Nombre</th><th class="py-2 pr-4">Estudiantes</th><th class="py-2 pr-4">Visible</th><th class="py-2 pr-4"></th></tr></thead>
+            <tbody id="cursos-cuerpo"></tbody>
+          </table>
+        </div>
+        <form id="form-curso" data-solo="principal" class="mt-5 flex flex-wrap items-end gap-3">
+          <div><label for="c-nombre" class="block text-sm font-semibold mb-1">Nuevo curso</label>
+            <input id="c-nombre" required maxlength="40" class="rounded-xl border border-bosque/25 px-3 py-2" placeholder="Ej: 1002" /></div>
+          <div><label for="c-est" class="block text-sm font-semibold mb-1">Estudiantes (opcional)</label>
+            <input id="c-est" type="number" min="1" max="500" class="rounded-xl border border-bosque/25 px-3 py-2 w-32" /></div>
+          <button type="submit" class="rounded-xl bg-bosque text-white px-4 py-2 font-semibold">Agregar</button>
+        </form>
+        <p id="cursos-msg" class="mt-3 text-sm font-semibold"></p>
+      </section>
+
+      <!-- ===== Administradores ===== -->
+      <section id="sec-admins" class="hidden bg-white rounded-2xl border border-bosque/10 p-5">
+        <h2 class="text-xl font-semibold mb-1">Administradores</h2>
+        <p class="text-sm opacity-80 mb-4">Aquí das acceso al panel a otras personas. Ellos pueden ver estadísticas, actividad y fotos; solo tú (administrador principal) gestionas cursos, QR, administradores y borrados.</p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead><tr class="border-b border-bosque/20"><th class="py-2 pr-4">Usuario</th><th class="py-2 pr-4">Nombre</th><th class="py-2 pr-4">Rol</th><th class="py-2 pr-4">Estado</th><th class="py-2 pr-4"></th></tr></thead>
+            <tbody id="admins-cuerpo"></tbody>
+          </table>
+        </div>
+        <form id="form-admin" class="mt-5 grid gap-3 sm:grid-cols-4 items-end">
+          <div><label for="a-usuario" class="block text-sm font-semibold mb-1">Usuario</label>
+            <input id="a-usuario" required minlength="3" maxlength="40" pattern="[A-Za-z0-9_.\-]+" class="w-full rounded-xl border border-bosque/25 px-3 py-2" /></div>
+          <div><label for="a-nombre" class="block text-sm font-semibold mb-1">Nombre</label>
+            <input id="a-nombre" required maxlength="80" class="w-full rounded-xl border border-bosque/25 px-3 py-2" /></div>
+          <div><label for="a-clave" class="block text-sm font-semibold mb-1">Contraseña (mín. 8)</label>
+            <input id="a-clave" type="text" required minlength="8" class="w-full rounded-xl border border-bosque/25 px-3 py-2" autocomplete="off" /></div>
+          <button type="submit" class="rounded-xl bg-bosque text-white px-4 py-2 font-semibold">Crear administrador</button>
+        </form>
+        <p id="admins-msg" class="mt-3 text-sm font-semibold"></p>
+      </section>
+
+      <!-- ===== Código QR ===== -->
+      <section id="sec-qr" class="hidden space-y-4">
+        <div class="bg-white rounded-2xl border border-bosque/10 p-5">
+          <h2 class="text-xl font-semibold mb-1">Código QR del colegio</h2>
+          <p class="text-sm opacity-80">Imprime este código y pégalo junto a las canecas de cada salón. Es el único que usan los estudiantes para entrar.</p>
+          <p id="qr-alerta" class="hidden mt-3 rounded-xl bg-amber-100 text-amber-900 text-sm px-4 py-3"></p>
+          <div class="mt-4 flex flex-wrap gap-3">
+            <button id="qr-imprimir" type="button" class="rounded-xl bg-bosque text-white px-4 py-2 font-semibold">Imprimir cartel</button>
+            <button id="qr-descargar" type="button" class="rounded-xl border border-bosque px-4 py-2 font-semibold">Descargar imagen (SVG)</button>
+            <button id="qr-renovar" type="button" class="rounded-xl border border-red-700 text-red-800 px-4 py-2 font-semibold">Renovar código</button>
+          </div>
+          <p class="mt-3 text-sm opacity-80">Renueva el código si alguien lo comparte fuera del colegio: el anterior deja de funcionar y habrá que cambiar los carteles.</p>
+        </div>
+        <div id="zona-qr" class="bg-white rounded-2xl border border-bosque/10 p-8 text-center max-w-md mx-auto">
+          <p class="text-3xl font-extrabold">EcoQR</p>
+          <p class="mt-1 text-lg">Escanea y descubre en qué caneca va tu residuo</p>
+          <div id="qr-svg" class="mx-auto my-4 w-64 h-64" aria-label="Código QR"></div>
+          <p id="qr-url" class="text-xs break-all opacity-70"></p>
+        </div>
+      </section>
+
+      <!-- ===== Sistema ===== -->
+      <section id="sec-sistema" class="hidden space-y-4">
+        <div id="sistema-ia" class="rounded-2xl p-5 border"></div>
+        <div id="sistema-tarjetas" class="grid gap-4 grid-cols-2 lg:grid-cols-4"></div>
+      </section>
+
+      <!-- ===== Mi cuenta ===== -->
+      <section id="sec-cuenta" class="hidden bg-white rounded-2xl border border-bosque/10 p-5 max-w-md">
+        <h2 class="text-xl font-semibold mb-4">Cambiar mi contraseña</h2>
+        <form id="form-clave" class="space-y-3">
+          <div><label for="p-actual" class="block text-sm font-semibold mb-1">Contraseña actual</label>
+            <input id="p-actual" type="password" required autocomplete="current-password" class="w-full rounded-xl border border-bosque/25 px-3 py-2" /></div>
+          <div><label for="p-nueva" class="block text-sm font-semibold mb-1">Contraseña nueva (mín. 8)</label>
+            <input id="p-nueva" type="password" required minlength="8" autocomplete="new-password" class="w-full rounded-xl border border-bosque/25 px-3 py-2" /></div>
+          <button type="submit" class="rounded-xl bg-bosque text-white px-4 py-2 font-semibold">Guardar</button>
+          <p id="cuenta-msg" class="text-sm font-semibold"></p>
+        </form>
+      </section>
+    </main>
+  </div>
+
+<script>
+/* ============================================================
+   Utilidades
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+const crear = (tag, clases, texto) => { const e = document.createElement(tag); if (clases) e.className = clases; if (texto !== undefined) e.textContent = texto; return e; };
+const COLOR_CATEGORIA = {
+  "Aprovechable": { fondo: "#ffffff", borde: "#14342b" },
+  "No Aprovechable": { fondo: "#1f2321", borde: "#1f2321" },
+  "Orgánico": { fondo: "#2f9e5b", borde: "#2f9e5b" },
+};
+let yo = null, graficas = {}, pestana = "resumen", offsetActividad = 0;
+
+async function api(ruta, opciones = {}) {
+  const cabeceras = opciones.body ? { "Content-Type": "application/json" } : {};
+  const r = await fetch("/admin/api" + ruta, { credentials: "same-origin", headers: cabeceras, ...opciones });
+  if (r.status === 401 && ruta !== "/login") { mostrarLogin(); throw new Error("Sesión vencida"); }
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    throw new Error(typeof d.detail === "string" ? d.detail : "Algo salió mal (" + r.status + ")");
+  }
+  return r.json();
+}
+function mensaje(id, texto, ok) { const e = $(id); e.textContent = texto; e.className = "mt-3 text-sm font-semibold " + (ok ? "text-hoja" : "text-red-700"); }
+
+/* ============================================================
+   Inicio de sesión
+   ============================================================ */
+function mostrarLogin() { $("vista-panel").classList.add("hidden"); $("vista-login").classList.remove("hidden"); }
+
+$("form-login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("l-error").classList.add("hidden");
+  try {
+    await api("/login", { method: "POST", body: JSON.stringify({ usuario: $("l-usuario").value, clave: $("l-clave").value }) });
+    $("l-clave").value = "";
+    await entrar();
+  } catch (err) { $("l-error").textContent = err.message; $("l-error").classList.remove("hidden"); }
+});
+
+$("btn-salir").addEventListener("click", async () => { try { await api("/logout", { method: "POST" }); } catch (_) {} location.reload(); });
+
+async function entrar() {
+  yo = await api("/yo");
+  $("quien").textContent = yo.nombre + " · " + (yo.rol === "principal" ? "Administrador principal" : "Administrador");
+  document.querySelectorAll("[data-solo='principal']").forEach((e) => e.classList.toggle("hidden", yo.rol !== "principal"));
+  await cargarFiltroCursos();
+  $("vista-login").classList.add("hidden");
+  $("vista-panel").classList.remove("hidden");
+  activarPestana("resumen");
+}
+
+/* ============================================================
+   Pestañas y filtros
+   ============================================================ */
+function activarPestana(nombre) {
+  pestana = nombre;
+  document.querySelectorAll(".tab").forEach((t) => {
+    const activa = t.dataset.tab === nombre;
+    t.setAttribute("aria-selected", activa);
+    t.classList.toggle("border-hoja", activa);
+    t.classList.toggle("border-transparent", !activa);
+  });
+  ["resumen", "ranking", "actividad", "cursos", "admins", "qr", "sistema", "cuenta"].forEach((s) => $("sec-" + s).classList.toggle("hidden", s !== nombre));
+  $("filtros").classList.toggle("hidden", !["resumen", "ranking", "actividad"].includes(nombre));
+  $("caja-f-curso").classList.toggle("hidden", nombre === "ranking");     // el ranking compara todos los cursos
+  $("btn-csv").classList.toggle("hidden", nombre === "ranking");
+  ({ resumen: cargarResumen, ranking: cargarRanking, actividad: () => cargarActividad(true), cursos: cargarCursos,
+     admins: cargarAdmins, qr: cargarQR, sistema: cargarSistema, cuenta: () => {} })[nombre]();
+}
+document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => activarPestana(t.dataset.tab)));
+
+function consulta() {
+  const p = new URLSearchParams();
+  if ($("f-desde").value) p.set("desde", $("f-desde").value);
+  if ($("f-hasta").value) p.set("hasta", $("f-hasta").value);
+  if ($("f-curso").value && pestana !== "ranking") p.set("curso", $("f-curso").value);
+  const s = p.toString();
+  $("btn-csv").href = "/admin/api/exportar.csv" + (s ? "?" + s : "");
+  return s ? "?" + s : "";
+}
+["f-desde", "f-hasta", "f-curso"].forEach((id) => $(id).addEventListener("change", () => activarPestana(pestana)));
+$("f-limpiar").addEventListener("click", () => { $("f-desde").value = ""; $("f-hasta").value = ""; $("f-curso").value = ""; activarPestana(pestana); });
+
+async function cargarFiltroCursos() {
+  const cursos = await api("/cursos");
+  const sel = $("f-curso"), actual = sel.value;
+  sel.length = 1;
+  cursos.forEach((c) => sel.appendChild(new Option(c.nombre, c.nombre)));
+  sel.value = actual;
+}
+
+/* ============================================================
+   Resumen general
+   ============================================================ */
+function grafica(id, config) { if (!graficas[id]) graficas[id] = new Chart($(id), config); return graficas[id]; }
+function actualizar(g, etiquetas, valores) { g.data.labels = etiquetas; g.data.datasets[0].data = valores; g.update(); }
+
+async function cargarResumen() {
+  const d = await api("/resumen" + consulta());
+  $("k-residuos").textContent = d.total_residuos.toLocaleString("es-CO");
+  $("k-reportes").textContent = d.total_reportes.toLocaleString("es-CO");
+  $("k-part").textContent = d.participantes.toLocaleString("es-CO");
+  $("k-aprov").textContent = d.total_residuos ? Math.round((d.por_categoria["Aprovechable"] / d.total_residuos) * 100) + " %" : "—";
+  $("k-sinid").textContent = d.total_reportes ? Math.round((d.sin_identificar / d.total_reportes) * 100) + " %" : "—";
+
+  const cats = Object.keys(COLOR_CATEGORIA);
+  const torta = grafica("g-torta", { type: "pie",
+    data: { labels: cats, datasets: [{ data: [], borderWidth: 2, backgroundColor: cats.map((c) => COLOR_CATEGORIA[c].fondo), borderColor: cats.map((c) => COLOR_CATEGORIA[c].borde) }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" },
+      tooltip: { callbacks: { label: (c) => { const t = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${t ? ((c.parsed / t) * 100).toFixed(1) : 0} %)`; } } } } } });
+  actualizar(torta, cats, cats.map((c) => d.por_categoria[c] || 0));
+
+  const barraOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } };
+  actualizar(grafica("g-cursos", { type: "bar", data: { labels: [], datasets: [{ data: [], backgroundColor: "#2f9e5b", borderRadius: 6 }] }, options: barraOpts }), Object.keys(d.por_curso), Object.values(d.por_curso));
+  actualizar(grafica("g-tipos", { type: "bar", data: { labels: [], datasets: [{ data: [], backgroundColor: "#14342b", borderRadius: 6 }] }, options: barraOpts }), Object.keys(d.por_residuo), Object.values(d.por_residuo));
+  actualizar(grafica("g-dias", { type: "line", data: { labels: [], datasets: [{ data: [], borderColor: "#14342b", backgroundColor: "rgba(47,158,91,.15)", fill: true, tension: 0.25 }] }, options: barraOpts }), Object.keys(d.por_dia), Object.values(d.por_dia));
+}
+
+/* ============================================================
+   Ranking
+   ============================================================ */
+async function cargarRanking() {
+  const d = await api("/ranking" + consulta());
+  $("ranking-nota").textContent = d.criterio === "por_estudiante"
+    ? "Ordenado por residuos clasificados por estudiante del curso, para comparar salones de distinto tamaño."
+    : "Ordenado por total de residuos clasificados. Para un ranking más justo, anota cuántos estudiantes tiene cada curso en la pestaña Cursos.";
+  const cuerpo = $("ranking-cuerpo");
+  cuerpo.replaceChildren();
+  d.filas.forEach((f) => {
+    const tr = crear("tr", "border-b border-bosque/10" + (f.posicion <= 3 && f.residuos ? " font-semibold" : ""));
+    [f.posicion + "°", f.curso, f.residuos, f.por_estudiante ?? "—", f.participantes, f.reportes, f.pct_aprovechable === null ? "—" : f.pct_aprovechable + " %"]
+      .forEach((v) => tr.appendChild(crear("td", "py-2 pr-4", String(v))));
+    cuerpo.appendChild(tr);
+  });
+}
+
+/* ============================================================
+   Actividad
+   ============================================================ */
+async function cargarActividad(reiniciar) {
+  if (reiniciar) { offsetActividad = 0; $("actividad-cuerpo").replaceChildren(); }
+  const q = consulta();
+  const filas = await api("/actividad" + (q ? q + "&" : "?") + "limite=100&desplazamiento=" + offsetActividad);
+  const cuerpo = $("actividad-cuerpo");
+  filas.forEach((f) => {
+    const tr = crear("tr", "border-b border-bosque/10");
+    tr.appendChild(crear("td", "py-2 pr-4", f.fecha_hora.slice(0, 16)));
+    tr.appendChild(crear("td", "py-2 pr-4", f.usuario));
+    tr.appendChild(crear("td", "py-2 pr-4", f.curso));
+    const texto = f.estado === "ok" ? f.residuos.map((r) => r.nombre + (r.cantidad > 1 ? " ×" + r.cantidad : "")).join(", ") : "No se pudo identificar";
+    tr.appendChild(crear("td", "py-2 pr-4" + (f.estado === "ok" ? "" : " text-amber-800"), texto));
+    const tdFoto = crear("td", "py-2 pr-4");
+    const a = crear("a"); a.href = "/admin/api/foto/" + f.nombre_archivo; a.target = "_blank"; a.rel = "noopener";
+    const img = crear("img", "h-12 w-12 rounded-lg object-cover border border-bosque/15"); img.src = a.href; img.loading = "lazy"; img.alt = "Foto del reporte " + f.id;
+    a.appendChild(img); tdFoto.appendChild(a); tr.appendChild(tdFoto);
+    const tdAcc = crear("td", "py-2 pr-4");
+    if (yo.rol === "principal") {
+      const b = crear("button", "text-red-800 underline", "Borrar"); b.type = "button";
+      b.addEventListener("click", async () => {
+        if (!confirm("¿Borrar este reporte y su foto? No se puede deshacer.")) return;
+        try { await api("/reportes/" + f.id, { method: "DELETE" }); tr.remove(); } catch (err) { alert(err.message); }
+      });
+      tdAcc.appendChild(b);
+    }
+    tr.appendChild(tdAcc);
+    cuerpo.appendChild(tr);
+  });
+  offsetActividad += filas.length;
+  $("btn-mas").classList.toggle("hidden", filas.length < 100);
+  $("actividad-vacia").classList.toggle("hidden", offsetActividad > 0);
+}
+$("btn-mas").addEventListener("click", () => cargarActividad(false));
+
+/* ============================================================
+   Cursos
+   ============================================================ */
+async function cargarCursos() {
+  const cursos = await api("/cursos");
+  const cuerpo = $("cursos-cuerpo");
+  cuerpo.replaceChildren();
+  cursos.forEach((c) => {
+    const tr = crear("tr", "border-b border-bosque/10");
+    const esP = yo.rol === "principal";
+    const nombre = crear("input", "rounded-lg border border-bosque/25 px-2 py-1 w-32"); nombre.value = c.nombre; nombre.disabled = !esP; nombre.setAttribute("aria-label", "Nombre del curso");
+    const est = crear("input", "rounded-lg border border-bosque/25 px-2 py-1 w-24"); est.type = "number"; est.min = 1; est.max = 500; est.value = c.estudiantes ?? ""; est.disabled = !esP; est.setAttribute("aria-label", "Estudiantes");
+    const act = crear("input"); act.type = "checkbox"; act.checked = !!c.activo; act.disabled = !esP; act.setAttribute("aria-label", "Visible para estudiantes");
+    [nombre, est, act].forEach((el) => { const td = crear("td", "py-2 pr-4"); td.appendChild(el); tr.appendChild(td); });
+    const tdG = crear("td", "py-2 pr-4");
+    if (esP) {
+      const g = crear("button", "rounded-lg bg-bosque text-white px-3 py-1 font-semibold", "Guardar"); g.type = "button";
+      g.addEventListener("click", async () => {
+        try {
+          const cuerpoPatch = { nombre: nombre.value, activo: act.checked };
+          if (est.value) cuerpoPatch.estudiantes = Number(est.value);
+          await api("/cursos/" + c.id, { method: "PATCH", body: JSON.stringify(cuerpoPatch) });
+          mensaje("cursos-msg", "Guardado.", true); cargarFiltroCursos();
+        } catch (err) { mensaje("cursos-msg", err.message, false); }
+      });
+      tdG.appendChild(g);
+    }
+    tr.appendChild(tdG);
+    cuerpo.appendChild(tr);
+  });
+}
+$("form-curso").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    const cuerpo = { nombre: $("c-nombre").value };
+    if ($("c-est").value) cuerpo.estudiantes = Number($("c-est").value);
+    await api("/cursos", { method: "POST", body: JSON.stringify(cuerpo) });
+    $("c-nombre").value = ""; $("c-est").value = "";
+    mensaje("cursos-msg", "Curso agregado.", true); cargarCursos(); cargarFiltroCursos();
+  } catch (err) { mensaje("cursos-msg", err.message, false); }
+});
+
+/* ============================================================
+   Administradores
+   ============================================================ */
+async function cargarAdmins() {
+  const lista = await api("/administradores");
+  const cuerpo = $("admins-cuerpo");
+  cuerpo.replaceChildren();
+  lista.forEach((a) => {
+    const tr = crear("tr", "border-b border-bosque/10");
+    [a.usuario, a.nombre, a.rol === "principal" ? "Principal" : "Administrador", a.activo ? "Activo" : "Desactivado"].forEach((v) => tr.appendChild(crear("td", "py-2 pr-4", v)));
+    const td = crear("td", "py-2 pr-4 space-x-3");
+    if (a.id !== yo.id) {
+      const t = crear("button", "underline", a.activo ? "Desactivar" : "Activar"); t.type = "button";
+      t.addEventListener("click", async () => { try { await api("/administradores/" + a.id, { method: "PATCH", body: JSON.stringify({ activo: !a.activo }) }); cargarAdmins(); } catch (err) { mensaje("admins-msg", err.message, false); } });
+      td.appendChild(t);
+    }
+    const r = crear("button", "underline", "Nueva contraseña"); r.type = "button";
+    r.addEventListener("click", async () => {
+      const clave = prompt("Nueva contraseña para " + a.usuario + " (mínimo 8 caracteres):");
+      if (!clave) return;
+      try { await api("/administradores/" + a.id, { method: "PATCH", body: JSON.stringify({ clave }) }); mensaje("admins-msg", "Contraseña actualizada.", true); } catch (err) { mensaje("admins-msg", err.message, false); }
+    });
+    td.appendChild(r);
+    tr.appendChild(td);
+    cuerpo.appendChild(tr);
+  });
+}
+$("form-admin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/administradores", { method: "POST", body: JSON.stringify({ usuario: $("a-usuario").value, nombre: $("a-nombre").value, clave: $("a-clave").value }) });
+    $("form-admin").reset(); mensaje("admins-msg", "Administrador creado. Entrégale su usuario y contraseña.", true); cargarAdmins();
+  } catch (err) { mensaje("admins-msg", err.message, false); }
+});
+
+/* ============================================================
+   Código QR
+   ============================================================ */
+let svgActual = "";
+function pintarQR(d) {
+  svgActual = d.svg;
+  $("qr-svg").innerHTML = d.svg;                 // SVG generado por nuestro propio servidor
+  const svg = $("qr-svg").querySelector("svg");
+  if (svg) {
+    // El SVG trae tamaño fijo y no tiene viewBox: lo creamos para que se escale sin recortarse
+    if (!svg.getAttribute("viewBox")) svg.setAttribute("viewBox", "0 0 " + parseFloat(svg.getAttribute("width")) + " " + parseFloat(svg.getAttribute("height")));
+    svg.setAttribute("width", "100%"); svg.setAttribute("height", "100%");
+  }
+  $("qr-url").textContent = d.url;
+  const local = /localhost|127\.0\.0\.1|^https?:\/\/(10|192\.168)\./.test(d.url);
+  $("qr-alerta").textContent = "Esta dirección solo funciona en tu red o computador. Antes de imprimir, publica la app en internet y define PUBLIC_URL para que el código apunte a la dirección pública.";
+  $("qr-alerta").classList.toggle("hidden", !local || d.direccion_publica_configurada);
+}
+async function cargarQR() { pintarQR(await api("/qr")); }
+$("qr-imprimir").addEventListener("click", () => window.print());
+$("qr-descargar").addEventListener("click", () => {
+  const a = crear("a"); a.href = URL.createObjectURL(new Blob([svgActual], { type: "image/svg+xml" })); a.download = "ecoqr-codigo.svg"; a.click();
+});
+$("qr-renovar").addEventListener("click", async () => {
+  if (!confirm("El código actual dejará de funcionar y tendrás que reemplazar los carteles. ¿Renovar?")) return;
+  try { pintarQR(await api("/qr/renovar", { method: "POST" })); } catch (err) { alert(err.message); }
+});
+
+/* ============================================================
+   Sistema (supervisión del funcionamiento)
+   ============================================================ */
+async function cargarSistema() {
+  const s = await api("/estado");
+  const ia = $("sistema-ia");
+  const estados = {
+    modelo: ["bg-white border-hoja", "La IA está activa", s.detecta_varios ? "Detecta varios residuos por foto." : "Identifica un residuo por foto. Si no está segura (menos de " + Math.round(s.umbral_confianza * 100) + " %), pide otra foto."],
+    claude: ["bg-white border-hoja", "La IA está activa (Claude)", "Identifica varios residuos por foto. Fotos enviadas a la IA hoy: " + s.fotos_ia_hoy + " de " + (s.limite_diario_ia || "sin tope") + ". Si se agota el crédito de la API, los estudiantes verán «detector no disponible»."],
+    simulado: ["bg-amber-100 border-amber-500 text-amber-900", "MODO DE PRUEBA", "Los resultados son inventados. No uses esto con estudiantes: falta configurar la IA (ANTHROPIC_API_KEY)."],
+    ninguno: ["bg-red-50 border-red-600 text-red-900", "Sin modelo de IA", "Los estudiantes no pueden enviar fotos todavía. Falta configurar la IA: define ANTHROPIC_API_KEY en el servidor."],
+  };
+  const [clases, titulo, texto] = estados[s.ia];
+  ia.className = "rounded-2xl p-5 border-2 " + clases;
+  ia.replaceChildren(crear("p", "text-xl font-extrabold", titulo), crear("p", "mt-1", texto));
+
+  const tarjetas = [
+    [s.reportes_hoy, "fotos enviadas hoy"], [s.reportes_totales, "fotos enviadas en total"],
+    [s.pct_sin_identificar === null ? "—" : s.pct_sin_identificar + " %", "no identificadas por la IA"],
+    [s.fotos_guardadas, "fotos guardadas"], [s.base_de_datos_kb + " KB", "tamaño de la base de datos"],
+    [s.disco_libre_mb + " MB", "espacio libre en disco"],
+    [s.retencion_dias ? s.retencion_dias + " días" : "Sin límite", "tiempo que se guardan los datos"], [s.hora_servidor, "hora del servidor"],
+  ];
+  const cont = $("sistema-tarjetas");
+  cont.replaceChildren();
+  tarjetas.forEach(([v, t]) => { const c = crear("div", "bg-white rounded-2xl border border-bosque/10 p-4"); c.appendChild(crear("p", "text-2xl font-extrabold", String(v))); c.appendChild(crear("p", "text-sm mt-1", t)); cont.appendChild(c); });
+}
+
+/* ============================================================
+   Mi cuenta
+   ============================================================ */
+$("form-clave").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await api("/cambiar-clave", { method: "POST", body: JSON.stringify({ actual: $("p-actual").value, nueva: $("p-nueva").value }) });
+    $("form-clave").reset(); $("cuenta-msg").textContent = "Contraseña cambiada."; $("cuenta-msg").className = "text-sm font-semibold text-hoja";
+  } catch (err) { $("cuenta-msg").textContent = err.message; $("cuenta-msg").className = "text-sm font-semibold text-red-700"; }
+});
+
+/* ============================================================
+   Arranque: si ya hay sesión, entramos directo
+   ============================================================ */
+entrar().catch(() => mostrarLogin());
+</script>
+</body>
+</html>

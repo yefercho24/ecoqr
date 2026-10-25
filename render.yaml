@@ -1,0 +1,26 @@
+# Despliegue en Render (https://render.com). Plan de pago: los discos persistentes no existen en el plan gratuito.
+# Los valores con "sync: false" NO están en este archivo: Render te los pide en su panel al crear el servicio.
+services:
+  - type: web
+    name: ecoqr
+    runtime: docker
+    plan: starter            # unos $7 USD al mes, no se duerme
+    healthCheckPath: /salud
+    disk:
+      name: datos
+      mountPath: /data       # aquí quedan la base de datos y las fotos; sobreviven a reinicios y despliegues
+      sizeGB: 2              # unos $0,50 USD al mes
+    envVars:
+      - key: DATA_DIR
+        value: /data
+      - key: ADMIN_USER
+        value: jaime
+      - key: ADMIN_PASSWORD
+        sync: false          # la escribes tú en el panel de Render (larga y propia)
+      - key: ANTHROPIC_API_KEY
+        sync: false          # la clave NUEVA de la API; se escribe en el panel de Render, nunca en este archivo
+      - key: LIMITE_DIARIO_IA
+        value: "1500"        # tope de fotos por día enviadas a la IA de pago
+      - key: RETENCION_DIAS
+        value: "180"         # las fotos se borran a los 180 días
+      # PUBLIC_URL: se agrega DESPUÉS del primer despliegue, con la dirección real que Render asigne.

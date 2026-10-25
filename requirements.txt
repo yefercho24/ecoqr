@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+pillow>=10.0
+segno>=1.6
+numpy>=1.26
+httpx>=0.27
+# Solo cuando conectes un modelo real de IA (carpeta modelo/):
+# tensorflow-cpu>=2.16   (probado con 2.21 y Python 3.12; la 2.15 NO instala en Python 3.12)

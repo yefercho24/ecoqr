@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Pantalla vertical de celular; viewport-fit=cover para pantallas con notch -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#14342b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="EcoQR" />
+  <title>EcoQR</title>
+
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/static/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/static/icon-192.png" />
+
+  <!-- CSS compilado con Tailwind (carpeta static/). Para regenerarlo: npm run build:css -->
+  <link rel="stylesheet" href="/static/fuentes.css" />
+  <link rel="stylesheet" href="/static/tailwind.css" />
+</head>
+
+<body class="bg-tiza font-sans text-bosque min-h-screen">
+
+  <p id="aviso-offline" class="hidden bg-amber-100 text-amber-900 text-sm text-center px-4 py-2" role="status">
+    Sin conexión. Puedes tomar la foto, pero necesitas internet para enviarla.
+  </p>
+
+  <header class="bg-bosque text-white px-5 pb-6">
+    <h1 class="text-3xl font-extrabold leading-tight">EcoQR</h1>
+    <p class="mt-1 text-white/80 text-base max-w-[34ch]">
+      Toma una foto del residuo y te decimos en qué caneca va y por qué.
+    </p>
+  </header>
+
+  <main class="px-5 -mt-3 pb-10 max-w-md mx-auto">
+
+    <!-- Pantalla 0: cargando -->
+    <section id="vista-cargando" class="bg-white rounded-2xl shadow-sm border border-bosque/10 p-6 text-center">
+      <p>Cargando…</p>
+    </section>
+
+    <!-- Pantalla 1: no entró por el QR -->
+    <section id="vista-qr" class="hidden bg-white rounded-2xl shadow-sm border border-bosque/10 p-6 text-center">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-14 h-14 mx-auto text-hoja" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 4h6v6H3V4zm12 0h6v6h-6V4zM3 14h6v6H3v-6zm12 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2z" />
+      </svg>
+      <h2 class="text-xl font-extrabold mt-3">Escanea el código QR</h2>
+      <p id="msg-qr" class="mt-2">
+        Abre la cámara de tu celular y apunta al código QR que está junto a las canecas de tu salón.
+      </p>
+      <button id="btn-reintentar" type="button" class="mt-5 rounded-xl border border-bosque px-5 py-3 font-semibold">Ya lo escaneé, reintentar</button>
+    </section>
+
+    <!-- Pantalla 2: formulario -->
+    <form id="form-reporte" class="hidden bg-white rounded-2xl shadow-sm border border-bosque/10 p-5 space-y-5" novalidate>
+
+      <div>
+        <label for="usuario" class="block text-sm font-semibold mb-1.5">Tu nombre</label>
+        <input id="usuario" name="usuario" type="text" required maxlength="80"
+               autocomplete="name" placeholder="Ej: Laura Gómez"
+               class="w-full rounded-xl border border-bosque/25 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-hoja" />
+      </div>
+
+      <div>
+        <label for="curso" class="block text-sm font-semibold mb-1.5">Tu curso</label>
+        <select id="curso" name="curso" required
+                class="w-full rounded-xl border border-bosque/25 px-4 py-3 text-base bg-white focus:outline-none focus:ring-2 focus:ring-hoja">
+          <option value="" disabled selected>Elige tu curso</option>
+        </select>
+      </div>
+
+      <div>
+        <span class="block text-sm font-semibold mb-1.5">Foto del residuo</span>
+        <p id="consejo-foto" class="text-sm opacity-80 mb-2">Acércate y usa buena luz. Un residuo a la vez da mejores resultados.</p>
+
+        <!-- capture="environment" abre la cámara trasera de forma nativa -->
+        <input id="foto" name="foto" type="file" accept="image/*" capture="environment" class="sr-only" />
+
+        <div id="zona-preview" class="hidden mb-3 overflow-hidden rounded-xl border border-bosque/15 bg-tiza">
+          <img id="preview" alt="Vista previa de la foto tomada" class="w-full max-h-72 object-cover" />
+        </div>
+
+        <label for="foto" id="btn-captura"
+               class="flex items-center justify-center gap-2 w-full rounded-xl border-2 border-dashed border-hoja text-hoja font-semibold py-4 cursor-pointer active:bg-hoja/10 focus-within:ring-2 focus-within:ring-hoja">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h1.5l1.2-1.8A2 2 0 019.4 4h5.2a2 2 0 011.7 1.2L17.5 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <circle cx="12" cy="13" r="3.5" />
+          </svg>
+          <span id="texto-captura">Tomar foto</span>
+        </label>
+      </div>
+
+      <label class="flex items-start gap-3 text-sm">
+        <input id="consentimiento" type="checkbox" class="mt-0.5 h-5 w-5 shrink-0 rounded border-bosque/40 accent-[#2f9e5b]" />
+        <span>Acepto que mi nombre y la foto se guarden para este proyecto de reciclaje del colegio. Solo los ve el equipo administrador.</span>
+      </label>
+
+      <p id="error" role="alert" class="hidden rounded-xl bg-red-50 text-red-800 text-sm px-4 py-3"></p>
+
+      <button id="btn-enviar" type="submit"
+              class="w-full rounded-xl bg-bosque text-white font-semibold text-lg py-4 active:scale-[.99] disabled:opacity-50 disabled:cursor-not-allowed">
+        Identificar residuo
+      </button>
+    </form>
+
+    <!-- Pantalla 3: resultado -->
+    <section id="vista-resultado" class="hidden pt-8" aria-live="polite">
+      <h2 id="res-titulo" class="text-xl font-extrabold mb-3"></h2>
+      <div id="res-lista" class="space-y-3"></div>
+      <p id="res-aviso" class="hidden mt-3 text-sm rounded-xl bg-amber-100 text-amber-900 px-4 py-3"></p>
+      <button id="btn-nuevo" type="button" class="mt-5 w-full rounded-xl bg-bosque text-white py-4 text-lg font-semibold">
+        Reportar otro residuo
+      </button>
+    </section>
+  </main>
+
+<script>
+/* ============================================================
+   Configuración
+   ============================================================ */
+const API_BASE = "";                 // vacío = mismo servidor que sirve esta página
+const MAX_LADO_FOTO = 1280;          // la foto se reduce a este tamaño antes de enviarla (ahorra datos)
+
+// Aspecto de cada caneca (norma colombiana): blanca, negra y verde
+const ESTILO_CANECA = {
+  blanca: { caja: "bg-white text-bosque border-bosque/30", chip: "bg-bosque text-white", titulo: "Caneca blanca" },
+  negra:  { caja: "bg-neutral-900 text-white border-neutral-900", chip: "bg-white text-neutral-900", titulo: "Caneca negra" },
+  verde:  { caja: "bg-hoja text-white border-hoja", chip: "bg-white text-bosque", titulo: "Caneca verde" },
+};
+
+/* ============================================================
+   Referencias al DOM
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+const vistas = ["vista-cargando", "vista-qr", "form-reporte", "vista-resultado"];
+const inputFoto = $("foto"), preview = $("preview"), zonaPrev = $("zona-preview"), textoCap = $("texto-captura");
+const btnEnviar = $("btn-enviar"), errorBox = $("error");
+let urlPreview = null;
+
+function mostrarVista(id) { vistas.forEach((v) => $(v).classList.toggle("hidden", v !== id)); window.scrollTo({ top: 0 }); }
+function crear(tag, clases, texto) { const e = document.createElement(tag); if (clases) e.className = clases; if (texto !== undefined) e.textContent = texto; return e; }
+
+/* ============================================================
+   Inicio: ¿entró por el QR?
+   ============================================================ */
+async function iniciar() {
+  mostrarVista("vista-cargando");
+  try {
+    const r = await fetch(API_BASE + "/api/inicio", { credentials: "same-origin" });
+    const d = await r.json();
+    if (!d.acceso) return mostrarVista("vista-qr");
+
+    // Llenamos la lista de cursos que administra el profesor
+    const select = $("curso");
+    select.length = 1;
+    d.cursos.forEach((c) => select.appendChild(new Option(c, c)));
+    try { const g = localStorage.getItem("curso"); if (g && d.cursos.includes(g)) select.value = g; } catch (_) {}
+
+    $("consejo-foto").textContent = d.varios
+      ? "Acércate y usa buena luz. Puedes fotografiar varios residuos juntos."
+      : "Acércate y usa buena luz. Toma la foto de un residuo a la vez.";
+    mostrarVista("form-reporte");
+  } catch (_) {
+    $("msg-qr").textContent = "No pudimos conectarnos. Revisa tu internet e inténtalo de nuevo.";
+    mostrarVista("vista-qr");
+  }
+}
+$("btn-reintentar").addEventListener("click", iniciar);
+
+try { $("usuario").value = localStorage.getItem("usuario") || ""; } catch (_) {}
+
+/* ============================================================
+   Foto: vista previa y reducción de tamaño
+   ============================================================ */
+inputFoto.addEventListener("change", () => {
+  const archivo = inputFoto.files[0];
+  if (!archivo) return;
+  if (urlPreview) URL.revokeObjectURL(urlPreview);
+  urlPreview = URL.createObjectURL(archivo);
+  preview.src = urlPreview;
+  zonaPrev.classList.remove("hidden");
+  textoCap.textContent = "Tomar otra foto";
+  ocultarError();
+});
+
+// Las cámaras modernas sacan fotos de varios MB; las reducimos para que suban rápido con datos móviles
+async function reducirFoto(archivo) {
+  try {
+    const bmp = await createImageBitmap(archivo, { imageOrientation: "from-image" });
+    const escala = Math.min(1, MAX_LADO_FOTO / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * escala);
+    canvas.height = Math.round(bmp.height * escala);
+    canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
+    return blob && blob.size < archivo.size ? new File([blob], "foto.jpg", { type: "image/jpeg" }) : archivo;
+  } catch (_) {
+    return archivo; // si el navegador no puede, enviamos la original
+  }
+}
+
+/* ============================================================
+   Envío
+   ============================================================ */
+$("form-reporte").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  ocultarError();
+
+  const usuario = $("usuario").value.trim();
+  const curso = $("curso").value;
+  const original = inputFoto.files[0];
+
+  if (!usuario) return mostrarError("Escribe tu nombre.");
+  if (!curso) return mostrarError("Elige tu curso.");
+  if (!original) return mostrarError("Toma una foto del residuo.");
+  if (!$("consentimiento").checked) return mostrarError("Marca la casilla para aceptar el uso de tus datos.");
+  if (!navigator.onLine) return mostrarError("No hay internet. Conéctate y vuelve a intentarlo.");
+
+  setCargando(true);
+  try {
+    const foto = await reducirFoto(original);
+    const datos = new FormData();           // datos + foto en un solo paquete (multipart/form-data)
+    datos.append("usuario", usuario);
+    datos.append("curso", curso);
+    datos.append("consentimiento", "true");
+    datos.append("foto", foto);
+
+    const r = await fetch(API_BASE + "/api/reportar", { method: "POST", body: datos, credentials: "same-origin" });
+    if (r.status === 401) { setCargando(false); return iniciar(); }   // el QR venció: pedimos escanear de nuevo
+    if (!r.ok) {
+      const det = await r.json().catch(() => ({}));
+      throw new Error(typeof det.detail === "string" ? det.detail : "No pudimos procesar la foto. Inténtalo de nuevo.");
+    }
+    try { localStorage.setItem("usuario", usuario); localStorage.setItem("curso", curso); } catch (_) {}
+    mostrarResultado(await r.json());
+  } catch (err) {
+    mostrarError(err.message || "No hay conexión con el servidor. Inténtalo de nuevo.");
+  } finally {
+    setCargando(false);
+  }
+});
+
+/* ============================================================
+   Resultado: una tarjeta por residuo, con su caneca y su explicación
+   ============================================================ */
+function mostrarResultado(r) {
+  const lista = $("res-lista"), aviso = $("res-aviso");
+  lista.replaceChildren();
+  aviso.classList.add("hidden");
+
+  if (r.estado !== "ok" || !r.residuos.length) {
+    $("res-titulo").textContent = "No pude identificarlo con seguridad";
+    const t = crear("div", "rounded-2xl p-5 bg-white border border-bosque/20");
+    t.appendChild(crear("p", "", "Prueba de nuevo: acércate más, usa buena luz y deja el residuo solo, sobre un fondo liso. " +
+      "Mientras tanto, si tienes dudas, pregúntale a tu profesor."));
+    lista.appendChild(t);
+  } else {
+    const total = r.residuos.reduce((a, x) => a + x.cantidad, 0);
+    $("res-titulo").textContent = total === 1 ? "Identifiqué 1 residuo" : `Identifiqué ${total} residuos`;
+    r.residuos.forEach((x) => {
+      const estilo = ESTILO_CANECA[x.caneca] || ESTILO_CANECA.negra;
+      const tarjeta = crear("article", "rounded-2xl p-5 border " + estilo.caja);
+      tarjeta.appendChild(crear("p", "text-xl font-extrabold", x.nombre + (x.cantidad > 1 ? " × " + x.cantidad : "")));
+      tarjeta.appendChild(crear("span", "inline-block mt-2 rounded-full px-3 py-1 text-sm font-semibold " + estilo.chip, estilo.titulo + " · " + x.categoria));
+      tarjeta.appendChild(crear("p", "mt-3 text-base", x.explicacion));
+      lista.appendChild(tarjeta);
+    });
+    if (r.modo === "simulado") {
+      aviso.textContent = "Modo de prueba: este resultado es de ejemplo, todavía no analiza la foto.";
+      aviso.classList.remove("hidden");
+    }
+  }
+  mostrarVista("vista-resultado");
+}
+
+$("btn-nuevo").addEventListener("click", () => {
+  inputFoto.value = "";                          // conservamos nombre y curso; limpiamos la foto
+  if (urlPreview) URL.revokeObjectURL(urlPreview);
+  urlPreview = null;
+  preview.removeAttribute("src");
+  zonaPrev.classList.add("hidden");
+  textoCap.textContent = "Tomar foto";
+  mostrarVista("form-reporte");
+});
+
+/* ============================================================
+   Utilidades
+   ============================================================ */
+function setCargando(c) { btnEnviar.disabled = c; btnEnviar.textContent = c ? "Analizando foto…" : "Identificar residuo"; }
+function mostrarError(m) { errorBox.textContent = m; errorBox.classList.remove("hidden"); }
+function ocultarError() { errorBox.classList.add("hidden"); }
+
+function actualizarRed() { $("aviso-offline").classList.toggle("hidden", navigator.onLine); }
+window.addEventListener("online", actualizarRed);
+window.addEventListener("offline", actualizarRed);
+actualizarRed();
+
+// El service worker solo funciona con HTTPS (o localhost)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+}
+
+iniciar();
+</script>
+</body>
+</html>

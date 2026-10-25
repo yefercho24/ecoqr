@@ -1,0 +1,12 @@
+{
+  "name": "detector-residuos",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i entrada.css -o static/tailwind.css --minify"
+  },
+  "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.2.0",
+    "chart.js": "4.4.3",
+    "tailwindcss": "3.4.17"
+  }
+}
