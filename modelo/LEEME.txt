@@ -1,0 +1,11 @@
+Pon aquí los archivos de tu modelo entrenado:
+  keras_model.h5   y   labels.txt        (los exporta Teachable Machine: "Tensorflow > Keras")
+
+Las clases del modelo deben llamarse como los residuos del catálogo:
+  botella, empaque, resto de comida, cascara fruta, plastico, papel, carton
+(mayúsculas, tildes y espacios no importan). Agrega también una clase `otro` ("no es un residuo": manos, piso, mesa, canecas vacías): si el modelo la elige, la app pide otra foto.
+Si tus clases tienen otros nombres, crea
+mapa_clases.json (mira mapa_clases.json.ejemplo): cada clase se traduce a una de esas 7 claves
+(botella, empaque, resto_comida, cascara_fruta, plastico, papel, carton).
+
+Al reiniciar el servidor, el panel (pestaña Sistema) debe decir "La IA está activa".
