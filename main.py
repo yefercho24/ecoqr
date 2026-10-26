@@ -31,7 +31,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager, closing
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Literal, Optional, Tuple
 
 import segno
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -623,9 +623,14 @@ def logout():
     return resp
 
 
+def id_fundador() -> int:
+    """El administrador principal ORIGINAL (la primera cuenta que se creó, la del profesor)."""
+    return db_one("SELECT MIN(id) AS id FROM administradores")["id"]
+
+
 @app.get("/admin/api/yo")
 def yo(admin: dict = Depends(exigir_admin)):
-    return admin
+    return {**admin, "fundador": admin["id"] == id_fundador()}
 
 
 class CambioClave(BaseModel):
@@ -834,11 +839,13 @@ class AdminNuevo(BaseModel):
     usuario: str = Field(min_length=3, max_length=40, pattern=r"^[A-Za-z0-9_.\-]+$")
     nombre: str = Field(min_length=1, max_length=80)
     clave: str = Field(min_length=8, max_length=200)
+    rol: Literal["admin", "principal"] = "admin"      # "principal" = también QR, cursos, administradores y borrados
 
 
 class AdminCambio(BaseModel):
     activo: Optional[bool] = None
     clave: Optional[str] = Field(default=None, min_length=8, max_length=200)
+    rol: Optional[Literal["admin", "principal"]] = None   # ascender o bajar de nivel
 
 
 @app.get("/admin/api/administradores")
@@ -847,11 +854,14 @@ def listar_admins(_: dict = Depends(exigir_principal)):
 
 
 @app.post("/admin/api/administradores", status_code=201)
-def crear_admin(datos: AdminNuevo, _: dict = Depends(exigir_principal)):
+def crear_admin(datos: AdminNuevo, yo_: dict = Depends(exigir_principal)):
+    # Reglas: solo el principal ORIGINAL (el profesor) crea o asciende a otros principales.
+    if datos.rol == "principal" and yo_["id"] != id_fundador():
+        raise HTTPException(status_code=403, detail="Solo el administrador principal original puede crear otros administradores principales.")
     if db_one("SELECT id FROM administradores WHERE usuario = ?", (datos.usuario,)):
         raise HTTPException(status_code=409, detail="Ese usuario ya existe.")
-    nuevo = db_exec("INSERT INTO administradores (usuario, nombre, clave_hash, rol) VALUES (?, ?, ?, 'admin')",
-                    (datos.usuario, datos.nombre.strip(), hashear_clave(datos.clave)))
+    nuevo = db_exec("INSERT INTO administradores (usuario, nombre, clave_hash, rol) VALUES (?, ?, ?, ?)",
+                    (datos.usuario, datos.nombre.strip(), hashear_clave(datos.clave), datos.rol))
     return {"id": nuevo}
 
 
@@ -860,12 +870,24 @@ def editar_admin(admin_id: int, datos: AdminCambio, yo_: dict = Depends(exigir_p
     fila = db_one("SELECT id, rol FROM administradores WHERE id = ?", (admin_id,))
     if not fila:
         raise HTTPException(status_code=404, detail="No existe ese administrador.")
-    if datos.activo is False and fila["id"] == yo_["id"]:
+    soy_yo = fila["id"] == yo_["id"]
+    soy_fundador = yo_["id"] == id_fundador()
+    if datos.activo is False and soy_yo:
         raise HTTPException(status_code=400, detail="No puedes desactivar tu propia cuenta.")
+    if datos.rol == "admin" and soy_yo:
+        raise HTTPException(status_code=400, detail="No puedes quitarte a ti mismo el rol de administrador principal.")
+    # Un principal que NO es el original no puede tocar a otro principal (ni desactivarlo, ni cambiarle la contraseña, ni bajarlo)
+    if fila["rol"] == "principal" and not soy_yo and not soy_fundador:
+        raise HTTPException(status_code=403, detail="Solo el administrador principal original puede cambiar a otro administrador principal.")
+    # Y solo el original asciende a alguien a principal
+    if datos.rol == "principal" and fila["rol"] != "principal" and not soy_fundador:
+        raise HTTPException(status_code=403, detail="Solo el administrador principal original puede ascender a alguien a principal.")
     if datos.activo is not None:
         db_exec("UPDATE administradores SET activo = ? WHERE id = ?", (int(datos.activo), admin_id))
     if datos.clave is not None:
         db_exec("UPDATE administradores SET clave_hash = ? WHERE id = ?", (hashear_clave(datos.clave), admin_id))
+    if datos.rol is not None:
+        db_exec("UPDATE administradores SET rol = ? WHERE id = ?", (datos.rol, admin_id))
     return {"ok": True}
 
 

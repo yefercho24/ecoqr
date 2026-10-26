@@ -166,21 +166,26 @@
       <!-- ===== Administradores ===== -->
       <section id="sec-admins" class="hidden bg-white rounded-2xl border border-bosque/10 p-5">
         <h2 class="text-xl font-semibold mb-1">Administradores</h2>
-        <p class="text-sm opacity-80 mb-4">Aquí das acceso al panel a otras personas. Ellos pueden ver estadísticas, actividad y fotos; solo tú (administrador principal) gestionas cursos, QR, administradores y borrados.</p>
+        <p class="text-sm opacity-80 mb-4">Aquí das acceso al panel a otras personas. Un <strong>administrador</strong> puede ver estadísticas, actividad y fotos. Un <strong>administrador principal</strong> además gestiona cursos, código QR, administradores y borrados. Solo el principal original (el primero) puede crear o ascender a otros principales y cambiarlos.</p>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
             <thead><tr class="border-b border-bosque/20"><th class="py-2 pr-4">Usuario</th><th class="py-2 pr-4">Nombre</th><th class="py-2 pr-4">Rol</th><th class="py-2 pr-4">Estado</th><th class="py-2 pr-4"></th></tr></thead>
             <tbody id="admins-cuerpo"></tbody>
           </table>
         </div>
-        <form id="form-admin" class="mt-5 grid gap-3 sm:grid-cols-4 items-end">
+        <form id="form-admin" class="mt-5 grid gap-3 sm:grid-cols-3 items-end">
           <div><label for="a-usuario" class="block text-sm font-semibold mb-1">Usuario</label>
             <input id="a-usuario" required minlength="3" maxlength="40" pattern="[A-Za-z0-9_.\-]+" class="w-full rounded-xl border border-bosque/25 px-3 py-2" /></div>
           <div><label for="a-nombre" class="block text-sm font-semibold mb-1">Nombre</label>
             <input id="a-nombre" required maxlength="80" class="w-full rounded-xl border border-bosque/25 px-3 py-2" /></div>
           <div><label for="a-clave" class="block text-sm font-semibold mb-1">Contraseña (mín. 8)</label>
             <input id="a-clave" type="text" required minlength="8" class="w-full rounded-xl border border-bosque/25 px-3 py-2" autocomplete="off" /></div>
-          <button type="submit" class="rounded-xl bg-bosque text-white px-4 py-2 font-semibold">Crear administrador</button>
+          <div id="a-rol-caja"><label for="a-rol" class="block text-sm font-semibold mb-1">Tipo de cuenta</label>
+            <select id="a-rol" class="w-full rounded-xl border border-bosque/25 px-3 py-2 bg-white">
+              <option value="admin">Administrador (ve estadísticas, historial y fotos)</option>
+              <option value="principal" id="a-rol-principal">Administrador principal (también QR, cursos, administradores y borrados)</option>
+            </select></div>
+          <button type="submit" class="rounded-xl bg-bosque text-white px-4 py-2 font-semibold">Crear cuenta</button>
         </form>
         <p id="admins-msg" class="mt-3 text-sm font-semibold"></p>
       </section>
@@ -273,6 +278,7 @@ async function entrar() {
   yo = await api("/yo");
   $("quien").textContent = yo.nombre + " · " + (yo.rol === "principal" ? "Administrador principal" : "Administrador");
   document.querySelectorAll("[data-solo='principal']").forEach((e) => e.classList.toggle("hidden", yo.rol !== "principal"));
+  if (!yo.fundador) $("a-rol-principal")?.remove();     // solo el principal original puede crear otros principales
   await cargarFiltroCursos();
   $("vista-login").classList.add("hidden");
   $("vista-panel").classList.remove("hidden");
@@ -454,18 +460,36 @@ async function cargarAdmins() {
     const tr = crear("tr", "border-b border-bosque/10");
     [a.usuario, a.nombre, a.rol === "principal" ? "Principal" : "Administrador", a.activo ? "Activo" : "Desactivado"].forEach((v) => tr.appendChild(crear("td", "py-2 pr-4", v)));
     const td = crear("td", "py-2 pr-4 space-x-3");
-    if (a.id !== yo.id) {
-      const t = crear("button", "underline", a.activo ? "Desactivar" : "Activar"); t.type = "button";
-      t.addEventListener("click", async () => { try { await api("/administradores/" + a.id, { method: "PATCH", body: JSON.stringify({ activo: !a.activo }) }); cargarAdmins(); } catch (err) { mensaje("admins-msg", err.message, false); } });
-      td.appendChild(t);
+    // Un principal que no es el original no puede tocar a otros principales (el servidor también lo impide)
+    const puedoTocar = a.rol !== "principal" || a.id === yo.id || yo.fundador;
+    const boton = (texto, accion) => {
+      const b = crear("button", "underline", texto); b.type = "button";
+      b.addEventListener("click", async () => { try { await accion(); cargarAdmins(); } catch (err) { mensaje("admins-msg", err.message, false); } });
+      td.appendChild(b);
+    };
+    const cambiar = (cuerpoPatch) => api("/administradores/" + a.id, { method: "PATCH", body: JSON.stringify(cuerpoPatch) });
+    if (a.id !== yo.id && puedoTocar) boton(a.activo ? "Desactivar" : "Activar", () => cambiar({ activo: !a.activo }));
+    if (yo.fundador && a.rol === "admin") {
+      boton("Hacer principal", async () => {
+        if (!confirm("¿Dar a " + a.usuario + " el rol de administrador principal? Podrá ver y renovar el código QR, gestionar cursos y borrar reportes.")) return;
+        await cambiar({ rol: "principal" }); mensaje("admins-msg", a.usuario + " ahora es administrador principal.", true);
+      });
     }
-    const r = crear("button", "underline", "Nueva contraseña"); r.type = "button";
-    r.addEventListener("click", async () => {
-      const clave = prompt("Nueva contraseña para " + a.usuario + " (mínimo 8 caracteres):");
-      if (!clave) return;
-      try { await api("/administradores/" + a.id, { method: "PATCH", body: JSON.stringify({ clave }) }); mensaje("admins-msg", "Contraseña actualizada.", true); } catch (err) { mensaje("admins-msg", err.message, false); }
-    });
-    td.appendChild(r);
+    if (yo.fundador && a.rol === "principal" && a.id !== yo.id) {
+      boton("Quitar rol principal", async () => {
+        if (!confirm("¿Bajar a " + a.usuario + " a administrador normal?")) return;
+        await cambiar({ rol: "admin" }); mensaje("admins-msg", a.usuario + " ahora es administrador normal.", true);
+      });
+    }
+    if (puedoTocar) {
+      const r = crear("button", "underline", "Nueva contraseña"); r.type = "button";
+      r.addEventListener("click", async () => {
+        const clave = prompt("Nueva contraseña para " + a.usuario + " (mínimo 8 caracteres):");
+        if (!clave) return;
+        try { await cambiar({ clave }); mensaje("admins-msg", "Contraseña actualizada.", true); } catch (err) { mensaje("admins-msg", err.message, false); }
+      });
+      td.appendChild(r);
+    }
     tr.appendChild(td);
     cuerpo.appendChild(tr);
   });
@@ -473,8 +497,8 @@ async function cargarAdmins() {
 $("form-admin").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {
-    await api("/administradores", { method: "POST", body: JSON.stringify({ usuario: $("a-usuario").value, nombre: $("a-nombre").value, clave: $("a-clave").value }) });
-    $("form-admin").reset(); mensaje("admins-msg", "Administrador creado. Entrégale su usuario y contraseña.", true); cargarAdmins();
+    await api("/administradores", { method: "POST", body: JSON.stringify({ usuario: $("a-usuario").value, nombre: $("a-nombre").value, clave: $("a-clave").value, rol: $("a-rol").value }) });
+    $("form-admin").reset(); mensaje("admins-msg", "Cuenta creada. Entrégale su usuario y contraseña.", true); cargarAdmins();
   } catch (err) { mensaje("admins-msg", err.message, false); }
 });
 
